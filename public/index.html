@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Docker Logs Viewer</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: Arial, sans-serif;
+        background: linear-gradient(
+          135deg,
+          #2c3e50,
+          #34495e
+        ); /* Dark blue gradient */
+        color: #ecf0f1; /* Light gray text */
+        display: flex;
+        height: 100vh;
+      }
+      .sidebar {
+        width: 250px;
+        background: linear-gradient(
+          135deg,
+          #3498db,
+          #2980b9
+        ); /* Blue gradient */
+        padding: 20px;
+        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
+      }
+      .sidebar h2 {
+        margin-bottom: 20px;
+        font-size: 24px;
+        color: #fff;
+        text-align: center;
+      }
+      .sidebar .controls {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .sidebar select,
+      .sidebar button {
+        padding: 10px;
+        font-size: 16px;
+        border: none;
+        border-radius: 5px;
+        background-color: rgba(255, 255, 255, 0.1);
+        color: #fff;
+        cursor: pointer;
+        transition: 0.3s;
+      }
+      .sidebar select {
+        background-color: rgba(0, 0, 0, 0.2);
+      }
+      .sidebar button {
+        background: linear-gradient(
+          135deg,
+          #2ecc71,
+          #27ae60
+        ); /* Green gradient */
+      }
+      .sidebar button:hover {
+        opacity: 0.9;
+      }
+      .sidebar #stopButton {
+        background: linear-gradient(
+          135deg,
+          #e74c3c,
+          #c0392b
+        ); /* Red gradient */
+      }
+      .main-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 20px;
+      }
+      .main-content h2 {
+        margin-bottom: 20px;
+        font-size: 24px;
+        color: #fff;
+      }
+      .logs-container {
+        background: #1e1e1e; /* Dark background for logs */
+        color: #00ff00; /* Green text for logs */
+        padding: 15px;
+        flex: 1;
+        overflow-y: auto;
+        border-radius: 5px;
+        font-size: 14px;
+        white-space: pre-wrap;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+      }
+      .stop-message {
+        margin-top: 10px;
+        padding: 10px;
+        background: #e74c3c; /* Red background */
+        color: white;
+        border-radius: 5px;
+        text-align: center;
+      }
+      .resume-btn {
+        background: linear-gradient(
+          135deg,
+          #2ecc71,
+          #27ae60
+        ); /* Green gradient */
+        color: #fff;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: 0.3s;
+      }
+      .resume-btn:hover {
+        opacity: 0.9;
+      }
+      .hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <h2>Live Docker Logs</h2>
+      <div class="controls">
+        <select id="containerSelect"></select>
+        <button id="startButton" onclick="fetchLogs()">Start Logs</button>
+        <button id="stopButton" onclick="stopLogs()">Stop Logs</button>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      <h2>Logs Output</h2>
+      <pre id="logsOutput" class="logs-container"></pre>
+      <div id="stopMessage" class="stop-message hidden">
+        Logs stopped!
+        <button class="resume-btn" onclick="fetchLogs()">Resume</button>
+      </div>
+    </div>
+
+    <script>
+      let ws;
+      let logsActive = false;
+      const API_URL = "ws://localhost:9090";
+
+      function connectWebSocket() {
+        ws = new WebSocket(API_URL);
+
+        ws.onopen = () => {
+          console.log("Connected to WebSocket server");
+          ws.send(JSON.stringify({ type: "list_containers" }));
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const message = JSON.parse(event.data);
+            if (message.type === "container_list") {
+              updateContainerDropdown(message.data);
+            } else if (message.type === "logs" && logsActive) {
+              displayLogs(message.data);
+            }
+          } catch (error) {
+            console.error("Invalid JSON received:", event.data);
+          }
+        };
+
+        ws.onerror = (error) => console.error("WebSocket Error:", error);
+        ws.onclose = () => setTimeout(connectWebSocket, 2000);
+      }
+
+      function updateContainerDropdown(containers) {
+        const containerSelect = document.getElementById("containerSelect");
+        containerSelect.innerHTML = containers
+          .map((name) => `<option value="${name}">${name}</option>`)
+          .join("");
+      }
+
+      function fetchLogs() {
+        const container = document.getElementById("containerSelect").value;
+        document.getElementById("logsOutput").textContent = "";
+        logsActive = true;
+        ws.send(JSON.stringify({ type: "start_logs", container }));
+
+        // Hide stop message
+        document.getElementById("stopMessage").classList.add("hidden");
+      }
+
+      function stopLogs() {
+        logsActive = false;
+        ws.send(JSON.stringify({ type: "stop_logs" }));
+
+        // Show stop message
+        document.getElementById("stopMessage").classList.remove("hidden");
+      }
+
+      function displayLogs(logData) {
+        const logElement = document.getElementById("logsOutput");
+        logElement.textContent += logData + "\n";
+        logElement.scrollTop = logElement.scrollHeight;
+      }
+
+      // Initialize WebSocket
+      connectWebSocket();
+    </script>
+  </body>
+</html>

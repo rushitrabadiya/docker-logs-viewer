@@ -1,0 +1,9 @@
+FROM alpine:latest
+
+WORKDIR /app
+
+COPY log-generator.sh .
+
+RUN chmod +x log-generator.sh
+
+CMD ["sh", "./log-generator.sh"]
